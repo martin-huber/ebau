@@ -1,7 +1,6 @@
 import datetime
 from dataclasses import dataclass, field
-from typing import List, Optional, Union
-from typing.io import IO
+from typing import IO, List, Optional, Union
 
 from camac.instance.models import Instance
 

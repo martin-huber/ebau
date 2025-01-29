@@ -43,6 +43,8 @@ services:
       - pg15data:/var/lib/postgresql/data
     networks:
       - ebau.local
+    ports:
+      - "127.0.0.1:5432:5432"
 
   django: &django
     user: ${UID}
@@ -124,7 +126,7 @@ services:
       args:
         REQUIREMENTS: requirements-dev.txt
     command: qclusterdev
-    ports: []
+    ports: [ ]
 
   celery:
     <<: *django

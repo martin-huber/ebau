@@ -18,7 +18,7 @@ from camac.core.utils import generate_ebau_nr
 from camac.dossier_import.dossier_classes import (
     Dossier,
 )
-from camac.dossier_import.loaders import XlsxFileDossierLoader
+from camac.dossier_import.loaders import DossierLoader
 from camac.dossier_import.messages import (
     DOSSIER_IMPORT_STATUS_ERROR,
     DossierSummary,
@@ -54,8 +54,13 @@ def delay_and_refresh(func):
 def perform_import(dossier_import):
     try:
         configured_writer_cls = import_string(settings.DOSSIER_IMPORT["WRITER_CLASS"])
+        configured_loader_cls = import_string(
+            settings.DOSSIER_IMPORT.get(
+                "LOADER_CLASS", "camac.dossier_import.loaders.XlsxFileDossierLoader"
+            )
+        )
 
-        loader = XlsxFileDossierLoader()
+        loader: DossierLoader = configured_loader_cls()
 
         writer = configured_writer_cls(
             user_id=User.objects.get(username=settings.DOSSIER_IMPORT["USER"]).pk,

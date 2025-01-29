@@ -45,7 +45,15 @@ def safe_join(elements: Iterable, separator=" "):
     return separator.join(map(str, filter(None, elements))).strip()
 
 
-class XlsxFileDossierLoader:
+class DossierLoader:
+    class ConfigurationError(Exception):
+        pass
+
+    def load_dossiers(self, param):
+        raise DossierLoader.ConfigurationError  # pragma: no cover
+
+
+class XlsxFileDossierLoader(DossierLoader):
     """Load dossiers from xlsx in a zip archive with attachment directories.
 
     The expected zip file needs to comply with the following:

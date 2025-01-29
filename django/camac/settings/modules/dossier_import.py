@@ -96,4 +96,11 @@ DOSSIER_IMPORT = {
             "https://ebau.so.ch/auth/realms/ebau/protocol/openid-connect/token",
         ),
     },
+    "kt_ag": {
+        "ENABLED": True,
+        "WRITER_CLASS": "camac.dossier_import.config.kt_ag.KtAargauDossierWriter",
+        "LOADER_CLASS": "camac.dossier_import.config.kt_ag.KtAargauDossierLoader",
+        "CALUMA_FORM": "baugesuch-migration",
+        "FORM_ID": 1,
+    },
 }

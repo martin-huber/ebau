@@ -4,6 +4,8 @@ services:
     user: memcache:memcache
     networks:
       - ebau.local
+    ports:
+      - "127.0.0.1:11211:11211"
 
   proxy:
     image: nginxinc/nginx-unprivileged:1.27-alpine

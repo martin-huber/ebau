@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import List
 
 from caluma.caluma_form import api as form_api
@@ -12,11 +13,13 @@ from camac.caluma.extensions.events.general import get_caluma_setting
 from camac.core.models import InstanceService
 from camac.core.utils import generate_sort_key
 from camac.dossier_import.dossier_classes import Dossier
+from camac.dossier_import.loaders import DossierLoader
 from camac.dossier_import.messages import (
     Message,
     MessageCodes,
     Severity,
 )
+from camac.dossier_import.models import DossierImport
 from camac.dossier_import.validation import TargetStatus
 from camac.dossier_import.writers import (
     CalumaAnswerWriter,
@@ -30,6 +33,8 @@ from camac.instance.domain_logic.decision import DecisionLogic
 from camac.instance.models import Form, Instance, InstanceState
 from camac.permissions import events as permissions_events
 from camac.tags.models import Keyword
+
+DATE_FORMAT = "%d.%m.%Y"
 
 PERSON_VALUE_MAPPING = {
     "is_juristic_person": {
@@ -59,11 +64,32 @@ PLOT_DATA_MAPPING = {
 }
 
 
+class KtAargauDossierLoader(DossierLoader):
+    def load_dossiers(self, param: DossierImport):
+        dossier = Dossier(
+            id="EBPA-1088-5651",  # EBPA-Nr. , Dossier-ID/Stichworte [keywords]
+            proposal="Testgesuch für Schulung 11.11.24 & 25.11.25",  # Titel , Titel des Vorhabens [beschreibung-bauvorhaben]
+            submit_date=datetime.strptime("06.11.2024", DATE_FORMAT),
+        )
+        dossier._meta = Dossier.Meta(target_state="SUBMITTED")
+        print(f"Importing {dossier.id}")
+        yield dossier
+
+        dossier = Dossier(
+            id="EBPA-1716-3966",  # EBPA-Nr. , Dossier-ID/Stichworte [keywords]
+            proposal="Testgesuch für Dokumentation",  # Titel , Titel des Vorhabens [beschreibung-bauvorhaben]
+            submit_date=datetime.strptime("26.08.2024", DATE_FORMAT),
+        )
+        dossier._meta = Dossier.Meta(target_state="SUBMITTED")
+        print(f"Importing {dossier.id}")
+        yield dossier
+
+
 class KtAargauDossierWriter(DossierWriter):
-    id = CalumaAnswerWriter(
-        target="kommunale-gesuchsnummer", formatter="to-string", protected=True
-    )
-    proposal = CalumaAnswerWriter(target="umschreibung-bauprojekt", protected=True)
+    # id = CalumaAnswerWriter(
+    #     target="kommunale-gesuchsnummer", formatter="to-string", protected=True
+    # )
+    proposal = CalumaAnswerWriter(target="beschreibung-bauvorhaben", protected=True)
     cantonal_id = CalumaAnswerWriter(
         target="kantonale-gesuchsnummer", formatter="to-string"
     )
@@ -147,7 +173,7 @@ class KtAargauDossierWriter(DossierWriter):
             }
         )
         instance.case.save()
-        permissions_events.Trigger.instance_submitted(None, instance)
+        # permissions_events.Trigger.instance_submitted(None, instance)
         return instance
 
     def get_existing_dossier_ids(self, dossier_ids):
@@ -181,12 +207,13 @@ class KtAargauDossierWriter(DossierWriter):
         save_answer(
             document=instance.case.document,
             question=Question.objects.get(slug="gemeinde"),
-            value=str(self._group.service_id),
+            value=str(55),  # todo from where to get the "gemeinde" ?
             user=self._caluma_user,
         )
 
     def _post_write_fields(self, instance, dossier):
-        self._write_triage_fields(instance)
+        # self._write_triage_fields(instance)
+        pass
 
     def _write_triage_fields(self, instance: Instance):
         """Write triage answers for personal data.

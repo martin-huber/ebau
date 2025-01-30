@@ -51,7 +51,7 @@ def delay_and_refresh(func):
 
 
 @delay_and_refresh
-def perform_import(dossier_import):
+def perform_import(dossier_import: DossierImport):
     try:
         configured_writer_cls = import_string(settings.DOSSIER_IMPORT["WRITER_CLASS"])
         configured_loader_cls = import_string(
@@ -63,12 +63,13 @@ def perform_import(dossier_import):
         loader: DossierLoader = configured_loader_cls()
 
         writer = configured_writer_cls(
-            user_id=User.objects.get(username=settings.DOSSIER_IMPORT["USER"]).pk,
+            user_id=(dossier_import.user and dossier_import.user.pk)
+            or User.objects.get(username=settings.DOSSIER_IMPORT["USER"]).pk,
             group_id=dossier_import.group.pk,
             location_id=dossier_import.location and dossier_import.location.pk,
         )
         dossier_import.messages["import"] = {"details": []}
-        for dossier in loader.load_dossiers(dossier_import.get_archive()):
+        for dossier in loader.load_dossiers(dossier_import):
             dossier: Dossier
             try:
                 message = writer.import_dossier(

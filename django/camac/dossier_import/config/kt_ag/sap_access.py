@@ -19,37 +19,43 @@ schema = os.getenv("HANA_SCHEMA")
 
 def encode(obj):
     if isinstance(obj, Decimal):
-        return float(obj)
+        return int(obj) if obj == obj.to_integral() else float(obj) # todo why is a timestamp a float ?
     if isinstance(obj, datetime):
         return obj.isoformat()
     return obj
 
-def runQuery(query: str, subqueries=None):
+def runQuery(query: str, subqueries=None, filter=None, chunk_size=100, limit=None):
     if subqueries is None:
         subqueries = {}
-    # Create a cursor object
-    cursor = connection.cursor()
-    cursor.execute(f"SET SCHEMA {schema}")
+    try:
+        # Create a cursor object
+        cursor = connection.cursor()
+        cursor.execute(f"SET SCHEMA {schema}")
 
-    result = execute(cursor, query)
-    if len(result) == 1:
-        result = result[0]
-        for k, v in subqueries.items():
-            result[k] = execute(cursor, v)
+        if filter:
+            query = f"{query} WHERE {filter}"
 
-    # Close the cursor and connection
-    cursor.close()
-    connection.close
+        result = execute(cursor, query, limit=limit)
+        for r in result:
+            for k, v in subqueries.items():
+                r[k] = [e for e in execute(cursor, v, (r['GESUCH_ID']))]
+            yield r
+    finally:
+        # Close the cursor and connection
+        cursor.close()
 
-    print(json.dumps(result, indent=4, default=encode))
-    return result
 
+def execute(cursor, query, params=None, limit=None):
+    if limit:
+        query = f"{query} LIMIT {limit}"
+    cursor.execute(query, params)
 
-def execute(cursor, query):
-    cursor.execute(query)
-    # Fetch the results
-    result = [dict(zip(r.column_names, r.column_values)) for r in cursor.fetchall()]
-    return result
+    while True:
+        # Fetch the results
+        rows = cursor.fetchmany()
+        if not rows:
+            break
+        yield from [dict(zip(r.column_names, r.column_values)) for r in rows]
 
 
 # Establish a connection
@@ -102,20 +108,22 @@ try:
     # runQuery("SELECT * FROM TABLES WHERE TABLE_NAME = 'ZEBP_GESUCH'")
     # runQuery("SELECT * FROM TABLE_COLUMNS WHERE TABLE_NAME = 'ZEBP_GESUCH'")
 
-    gesuchs_id = "EBPA-8318-3681"
+    filter = f"ZEBP_GESUCH.GESUCH_ID = 'EBPA-8318-3681'"
     query = f"""select ZEBP_GESUCH.*, ZEBP_ENTSCHEID.*
                 from ZEBP_GESUCH
                     left join ZEBP_ENTSCHEID on ZEBP_GESUCH.GESUCH_ID = ZEBP_ENTSCHEID.EXTERN_ID
-                where ZEBP_GESUCH.GESUCH_ID = '{gesuchs_id}'"""
+            """
 
     stort_query = f"""select ZEBP_STORT.*, ZEZS_CITY.*, ZEBP_PARZ.*
                         from ZEBP_STORT
                                  left join ZEBP_PARZ on (ZEBP_STORT.city_id = ZEBP_PARZ.city_id and ZEBP_STORT.GESUCH_ID = ZEBP_PARZ.GESUCH_ID)
                                  left join ZEZS_CITY on ZEBP_STORT.CITY_ID = ZEZS_CITY.CITY_ID
-                        where ZEBP_STORT.GESUCH_ID = '{gesuchs_id}'"""
+                        where ZEBP_STORT.GESUCH_ID = ?"""
     subqueries = {"STORT": stort_query}
 
-    runQuery(query, subqueries)
+    result = runQuery(query, subqueries, chunk_size=5, limit=10)
+    for r in result:
+        print(json.dumps(r, indent=4, default=encode))
 
     # Close the connection
     connection.close()

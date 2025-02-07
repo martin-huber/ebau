@@ -1,7 +1,10 @@
 import json
 import os
+import timeit
+from contextlib import contextmanager
 from datetime import datetime
 
+import hdbcli
 from dotenv import load_dotenv
 from hdbcli import dbapi
 from hdbcli.dbapi import Decimal
@@ -19,48 +22,97 @@ schema = os.getenv("HANA_SCHEMA")
 
 def encode(obj):
     if isinstance(obj, Decimal):
-        return int(obj) if obj == obj.to_integral() else float(obj) # todo why is a timestamp a float ?
+        return int(obj) if obj == obj.to_integral() else float(obj)
     if isinstance(obj, datetime):
         return obj.isoformat()
     return obj
 
-def runQuery(query: str, subqueries=None, filter=None, chunk_size=100, limit=None):
+@contextmanager
+def managed_cursor(cursor):
+    try:
+        yield cursor
+    finally:
+        cursor.close()
+
+def runQuery(query: str, subqueries=None, filter=None, batch_size=100, limit=None):
     if subqueries is None:
         subqueries = {}
-    try:
-        # Create a cursor object
-        cursor = connection.cursor()
+
+    with managed_cursor(connection.cursor()) as cursor, managed_cursor(connection.cursor()) as sub_cursor:
+
         cursor.execute(f"SET SCHEMA {schema}")
 
         if filter:
             query = f"{query} WHERE {filter}"
 
-        result = execute(cursor, query, limit=limit)
+        result = execute(cursor, query, batch_size=batch_size, limit=limit)
         for r in result:
             for k, v in subqueries.items():
-                r[k] = [e for e in execute(cursor, v, (r['GESUCH_ID']))]
+                r[k] = [e for e in execute(sub_cursor, v, (r['GESUCH_ID']), is_subquery=True)]
+            # print(f"Added subquery results to {r['GESUCH_ID']}")
             yield r
-    finally:
-        # Close the cursor and connection
-        cursor.close()
 
-
-def execute(cursor, query, params=None, limit=None):
+def execute(cursor: hdbcli.dbapi.Cursor, query, params=None, batch_size=100, limit=None, is_subquery=False):
     if limit:
         query = f"{query} LIMIT {limit}"
     cursor.execute(query, params)
 
     while True:
         # Fetch the results
-        rows = cursor.fetchmany()
+        rows = cursor.fetchmany(batch_size)
         if not rows:
+            print()
             break
-        yield from [dict(zip(r.column_names, r.column_values)) for r in rows]
+        if not is_subquery:
+            print (".", end="")
+        yield from (dict(zip(r.column_names, r.column_values)) for r in rows)
 
+
+def write_json_file(data: str, relative_path: str, filename):
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    # Extract the first and second digits after "EBPA-"
+    first_digit, second_digit = filename.split("-")[1][:2]
+
+    target_dir = os.path.join(base_dir, f"{relative_path}/{first_digit}/{second_digit}")
+
+    # Zielverzeichnis erstellen, falls es nicht existiert
+    os.makedirs(target_dir, exist_ok=True)
+
+    # Datei im Zielverzeichnis speichern
+    file_path = os.path.join(target_dir, filename)
+    with open(file_path, "w", encoding="utf-8") as file:
+        file.write(data)
+
+
+def query_gesuche(filter, batch_size, limit):
+    global result
+    query = f"""select ZEBP_GESUCH.*, ZEBP_ENTSCHEID.*
+                from ZEBP_GESUCH
+                    left join ZEBP_ENTSCHEID on ZEBP_GESUCH.GESUCH_ID = ZEBP_ENTSCHEID.EXTERN_ID
+            """
+    stort_query = f"""select ZEBP_STORT.*, ZEZS_CITY.*, ZEBP_PARZ.*
+                        from ZEBP_STORT
+                                 left join ZEBP_PARZ on (ZEBP_STORT.city_id = ZEBP_PARZ.city_id and ZEBP_STORT.GESUCH_ID = ZEBP_PARZ.GESUCH_ID)
+                                 left join ZEZS_CITY on ZEBP_STORT.CITY_ID = ZEZS_CITY.CITY_ID
+                        where ZEBP_STORT.GESUCH_ID = ?"""
+    subqueries = {"STORT": stort_query}
+    return runQuery(query, subqueries, batch_size=batch_size, filter=filter, limit=limit)
+
+
+def write_gesuche_to_json():
+    global result
+    result = query_gesuche(filter=None, batch_size=500, limit=None)
+    i = 0
+    for r in result:
+        i+=1
+        # print(f"Writing json file for {r['GESUCH_ID']}")
+        json_str = json.dumps(r, indent=4, default=encode)
+        write_json_file(json_str, "database/json/", f"{r['GESUCH_ID']}.json")
+    print(f"Read {i} Gesuche from database")
 
 # Establish a connection
 try:
-    connection = dbapi.connect(
+    connection: hdbcli.dbapi.Connection = dbapi.connect(
         address=host,
         port=port,
         user=user,
@@ -108,23 +160,10 @@ try:
     # runQuery("SELECT * FROM TABLES WHERE TABLE_NAME = 'ZEBP_GESUCH'")
     # runQuery("SELECT * FROM TABLE_COLUMNS WHERE TABLE_NAME = 'ZEBP_GESUCH'")
 
-    filter = f"ZEBP_GESUCH.GESUCH_ID = 'EBPA-8318-3681'"
-    query = f"""select ZEBP_GESUCH.*, ZEBP_ENTSCHEID.*
-                from ZEBP_GESUCH
-                    left join ZEBP_ENTSCHEID on ZEBP_GESUCH.GESUCH_ID = ZEBP_ENTSCHEID.EXTERN_ID
-            """
+    # filter = f"ZEBP_GESUCH.GESUCH_ID = 'EBPA-8318-3681'"
 
-    stort_query = f"""select ZEBP_STORT.*, ZEZS_CITY.*, ZEBP_PARZ.*
-                        from ZEBP_STORT
-                                 left join ZEBP_PARZ on (ZEBP_STORT.city_id = ZEBP_PARZ.city_id and ZEBP_STORT.GESUCH_ID = ZEBP_PARZ.GESUCH_ID)
-                                 left join ZEZS_CITY on ZEBP_STORT.CITY_ID = ZEZS_CITY.CITY_ID
-                        where ZEBP_STORT.GESUCH_ID = ?"""
-    subqueries = {"STORT": stort_query}
-
-    result = runQuery(query, subqueries, chunk_size=5, limit=10)
-    for r in result:
-        print(json.dumps(r, indent=4, default=encode))
-
+    execution_time = timeit.timeit(write_gesuche_to_json, number=1)
+    print(f"Writing Gesuche to JSON took {execution_time} seconds.")
     # Close the connection
     connection.close()
 

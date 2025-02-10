@@ -49,7 +49,6 @@ def runQuery(query: str, subqueries=None, filter=None, batch_size=100, limit=Non
         for r in result:
             for k, v in subqueries.items():
                 r[k] = [e for e in execute(sub_cursor, v, (r['GESUCH_ID']), is_subquery=True)]
-            # print(f"Added subquery results to {r['GESUCH_ID']}")
             yield r
 
 def execute(cursor: hdbcli.dbapi.Cursor, query, params=None, batch_size=100, limit=None, is_subquery=False):
@@ -61,7 +60,6 @@ def execute(cursor: hdbcli.dbapi.Cursor, query, params=None, batch_size=100, lim
         # Fetch the results
         rows = cursor.fetchmany(batch_size)
         if not rows:
-            print()
             break
         if not is_subquery:
             print (".", end="")
@@ -95,7 +93,11 @@ def query_gesuche(filter, batch_size, limit):
                                  left join ZEBP_PARZ on (ZEBP_STORT.city_id = ZEBP_PARZ.city_id and ZEBP_STORT.GESUCH_ID = ZEBP_PARZ.GESUCH_ID)
                                  left join ZEZS_CITY on ZEBP_STORT.CITY_ID = ZEZS_CITY.CITY_ID
                         where ZEBP_STORT.GESUCH_ID = ?"""
-    subqueries = {"STORT": stort_query}
+    kontakt_query = f"""select ZEBP_KONTAKT.*
+                        from ZEBP_KONTAKT
+                        where ZEBP_KONTAKT.GESUCH_ID = ?"""
+    subqueries = {"ZEBP_STORT": stort_query,
+                  "ZEBP_KONTAKT": kontakt_query}
     return runQuery(query, subqueries, batch_size=batch_size, filter=filter, limit=limit)
 
 
@@ -105,7 +107,6 @@ def write_gesuche_to_json():
     i = 0
     for r in result:
         i+=1
-        # print(f"Writing json file for {r['GESUCH_ID']}")
         json_str = json.dumps(r, indent=4, default=encode)
         write_json_file(json_str, "database/json/", f"{r['GESUCH_ID']}.json")
     print(f"Read {i} Gesuche from database")

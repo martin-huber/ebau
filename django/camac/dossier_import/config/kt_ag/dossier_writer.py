@@ -1,4 +1,40 @@
-from django.camac.dossier_import.config.kt_ag import PLOT_DATA_MAPPING, PERSON_MAPPING, PERSON_VALUE_MAPPING
+from typing import List
+
+from caluma.caluma_form import api as form_api
+from caluma.caluma_form.api import save_answer
+from caluma.caluma_form.models import Form as CalumaForm, Question
+from caluma.caluma_workflow import api as workflow_api
+from caluma.caluma_workflow.api import skip_work_item
+from caluma.caluma_workflow.models import WorkItem
+
+from camac import settings
+from camac.caluma.extensions.events.general import get_caluma_setting
+from camac.core.models import InstanceService
+from camac.core.utils import generate_sort_key
+from camac.dossier_import.config.kt_ag import (
+    PERSON_MAPPING,
+    PERSON_VALUE_MAPPING,
+    PLOT_DATA_MAPPING,
+)
+from camac.dossier_import.dossier_classes import Dossier
+from camac.dossier_import.messages import (
+    Message,
+    MessageCodes,
+    Severity,
+)
+from camac.dossier_import.validation import TargetStatus
+from camac.dossier_import.writers import (
+    CalumaAnswerWriter,
+    CalumaListAnswerWriter,
+    CalumaPlotDataWriter,
+    CaseMetaWriter,
+    DossierWriter,
+)
+from camac.instance.domain_logic import CreateInstanceLogic
+from camac.instance.domain_logic.decision import DecisionLogic
+from camac.instance.models import Form, Instance, InstanceState
+from camac.permissions import events as permissions_events
+from camac.tags.models import Keyword
 
 
 class KtAargauDossierWriter(DossierWriter):
@@ -65,7 +101,7 @@ class KtAargauDossierWriter(DossierWriter):
             caluma_user=self._caluma_user,
             camac_user=self._user,
             group=self._group,
-            caluma_form=CalumaForm.objects.get(
+            caluma_form=CalumaForm.objects.get(  # noqa: F821
                 pk=settings.DOSSIER_IMPORT["CALUMA_FORM"]
             ),
             start_caluma=True,
@@ -158,7 +194,7 @@ class KtAargauDossierWriter(DossierWriter):
             triage_question = f"{table_question}-abweichend"
             value = f"{triage_question}-{suffix}"
 
-            form_api.save_answer(
+            form_api.save_answer(  # noqa: F821
                 document=instance.case.document,
                 question=Question.objects.get(pk=triage_question),
                 value=value,
@@ -222,7 +258,7 @@ class KtAargauDossierWriter(DossierWriter):
                         instance, work_item, self._caluma_user, self._user
                     )
 
-                permissions_events.Trigger.decision_decreed(None, instance)
+                permissions_events.Trigger.decision_decreed(None, instance)  # noqa: F821
 
             if config := get_caluma_setting("PRE_COMPLETE") and get_caluma_setting(
                 "PRE_COMPLETE"

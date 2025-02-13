@@ -98,8 +98,8 @@ DOSSIER_IMPORT = {
     },
     "kt_ag": {
         "ENABLED": True,
-        "WRITER_CLASS": "camac.dossier_import.config.kt_ag.KtAargauDossierWriter",
-        "LOADER_CLASS": "camac.dossier_import.config.kt_ag.KtAargauDossierLoader",
+        "WRITER_CLASS": "camac.dossier_import.config.kt_ag.dossier_writer.KtAargauDossierWriter",
+        "LOADER_CLASS": "camac.dossier_import.config.kt_ag.dossier_loader.KtAargauDossierLoader",
         "CALUMA_FORM": "baugesuch-migration",
         "FORM_ID": 1,
         "INSTANCE_STATE_MAPPING": {

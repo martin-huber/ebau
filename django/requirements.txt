@@ -33,6 +33,7 @@ ebau-gwr==0.7.1
 # We need to ensure we have this bugfix
 # https://github.com/graphql-python/graphene/issues/1580
 graphene==3.4.3
+hdbcli==2.23.24
 Jinja2==3.1.4
 jwcrypto==1.5.6
 lxml==5.3.0
@@ -53,6 +54,7 @@ pyproj==3.7.0
 python-dateutil==2.9.0.post0
 python-docx==1.1.2
 python-keycloak==4.7.3
+python-dotenv==1.0.1
 PyXB-X==1.2.6.2
 qrcode==8.0
 rapidfuzz==3.10.1

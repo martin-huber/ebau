@@ -3,6 +3,7 @@ import os
 import timeit
 from contextlib import contextmanager
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, Generator, Optional
 
 from dotenv import load_dotenv
@@ -30,11 +31,17 @@ SUBQUERY_DATES = """select ZEZS_DATES.*
                     where process_id = 'ZEBP' and
                     ZEZS_DATES.EXTERN_ID = ?
                 """
-SUBQUERIES = {"STANDORTE": SUBQUERY_LOCATIONS, "KONTAKTE": SUBQUERY_CONTACTS, "DATES": SUBQUERY_DATES}
+SUBQUERIES = {
+    "STANDORTE": SUBQUERY_LOCATIONS,
+    "KONTAKTE": SUBQUERY_CONTACTS,
+    "DATES": SUBQUERY_DATES,
+}
 
 
 class SAPAccess:
     def __init__(self):
+        self._connection = None
+
         # Load environment variables
         load_dotenv()
 
@@ -144,19 +151,30 @@ class SAPAccess:
             self._write_json_file(json_str, "database/json/", f"{r['GESUCH_ID']}.json")
         print(f"Read {i} Gesuche from database")
 
+    def _read_applications_from_json(self):
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        target_dir = Path(os.path.join(base_dir, "database/json/"))
+
+        for json_file in target_dir.rglob("*.json"):
+            with open(json_file, "r", encoding="utf-8") as file:
+                yield json.load(file)
+
     def query_applications(
         self,
         filter: Optional[str] = None,
         batch_size: Optional[int] = 500,
         limit: Optional[int] = None,
     ) -> Generator[Dict, None, None]:
-        return self._run_query(
-            QUERY_APPLICATIONS,
-            SUBQUERIES,
-            batch_size=batch_size,
-            filter=filter,
-            limit=limit,
-        )
+        if self._connection:
+            return self._run_query(
+                QUERY_APPLICATIONS,
+                SUBQUERIES,
+                batch_size=batch_size,
+                filter=filter,
+                limit=limit,
+            )
+        else:
+            return self._read_applications_from_json()
 
 
 if __name__ == "__main__":

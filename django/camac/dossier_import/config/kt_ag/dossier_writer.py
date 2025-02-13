@@ -82,11 +82,7 @@ class KtAargauDossierWriter(DossierWriter):
     )
 
     def create_instance(self, dossier: Dossier) -> Instance:
-        instance_state = InstanceState.objects.get(
-            name=settings.DOSSIER_IMPORT["INSTANCE_STATE_MAPPING"].get(
-                dossier._meta.target_state
-            )
-        )
+        instance_state = InstanceState.objects.get(name=dossier._meta.target_state)
 
         creation_data = dict(
             instance_state=instance_state,
@@ -115,7 +111,7 @@ class KtAargauDossierWriter(DossierWriter):
         )
 
         dossier_number = CreateInstanceLogic.generate_identifier(
-            instance, dossier.submit_date.year
+            instance, self._year_from_date_str(dossier.submit_date)
         )
 
         instance.case.meta.update(
@@ -127,6 +123,9 @@ class KtAargauDossierWriter(DossierWriter):
         instance.case.save()
         # permissions_events.Trigger.instance_submitted(None, instance)
         return instance
+
+    def _year_from_date_str(self, date_str: str):
+        return date_str[:4]
 
     def get_existing_dossier_ids(self, dossier_ids):
         return list(

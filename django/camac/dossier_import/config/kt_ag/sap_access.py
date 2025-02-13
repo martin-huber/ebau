@@ -9,19 +9,28 @@ from dotenv import load_dotenv
 from hdbcli import dbapi
 from hdbcli.dbapi import Cursor, Decimal
 
-QUERY_APPLICATIONS = """select ZEBP_GESUCH.*, ZEBP_ENTSCHEID.*
+QUERY_APPLICATIONS = """select ZEBP_GESUCH.*, ZEBP_ENTSCHEID.*, TJ30T.*, ZEZS_CITY.*
                         from ZEBP_GESUCH
-                            left join ZEBP_ENTSCHEID on ZEBP_GESUCH.GESUCH_ID = ZEBP_ENTSCHEID.EXTERN_ID
-        """
+                                 left join ZEBP_ENTSCHEID on ZEBP_GESUCH.GESUCH_ID = ZEBP_ENTSCHEID.EXTERN_ID
+                                 left join TJ30T on TJ30T.ESTAT = ZEBP_GESUCH.ESTAT and TJ30T.STSMA = 'ZEBP'
+                                 left join ZEZS_CITY on ZEZS_CITY.CITY_ID = ZEBP_GESUCH.GEMEINDE_ID
+                     """
 SUBQUERY_LOCATIONS = """select ZEBP_STORT.*, ZEZS_CITY.*, ZEBP_PARZ.*
                         from ZEBP_STORT
                                  left join ZEBP_PARZ on (ZEBP_STORT.city_id = ZEBP_PARZ.city_id and ZEBP_STORT.GESUCH_ID = ZEBP_PARZ.GESUCH_ID)
                                  left join ZEZS_CITY on ZEBP_STORT.CITY_ID = ZEZS_CITY.CITY_ID
-                        where ZEBP_STORT.GESUCH_ID = ?"""
+                        where ZEBP_STORT.GESUCH_ID = ?
+                    """
 SUBQUERY_CONTACTS = """select ZEBP_KONTAKT.*
                         from ZEBP_KONTAKT
-                        where ZEBP_KONTAKT.GESUCH_ID = ?"""
-SUBQUERIES = {"ZEBP_STORT": SUBQUERY_LOCATIONS, "ZEBP_KONTAKT": SUBQUERY_CONTACTS}
+                        where ZEBP_KONTAKT.GESUCH_ID = ?
+                    """
+SUBQUERY_DATES = """select ZEZS_DATES.*
+                    from ZEZS_DATES
+                    where process_id = 'ZEBP' and
+                    ZEZS_DATES.EXTERN_ID = ?
+                """
+SUBQUERIES = {"STANDORTE": SUBQUERY_LOCATIONS, "KONTAKTE": SUBQUERY_CONTACTS, "DATES": SUBQUERY_DATES}
 
 
 class SAPAccess:

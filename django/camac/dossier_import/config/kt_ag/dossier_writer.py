@@ -51,7 +51,7 @@ class KtAargauDossierWriter(DossierWriter):
     usage = CalumaAnswerWriter(target="nutzungsplanung-grundnutzung")
     application_type = CalumaAnswerWriter(target="geschaeftstyp")
     submit_date = CaseMetaWriter(
-        target="submit-date", formatter="datetime-to-string", protected=True
+        target="submit-date", formatter="yyyymmdd", protected=True
     )
     decision_date = CalumaAnswerWriter(target="entscheid-datum", task="decision")
     publication_date = CalumaAnswerWriter(target="datum-publikation")
@@ -82,7 +82,11 @@ class KtAargauDossierWriter(DossierWriter):
     )
 
     def create_instance(self, dossier: Dossier) -> Instance:
-        instance_state = InstanceState.objects.get(name=dossier._meta.target_state)
+        instance_state = InstanceState.objects.get(
+            name=settings.DOSSIER_IMPORT["INSTANCE_STATE_MAPPING"].get(
+                dossier._meta.target_state
+            )
+        )
 
         creation_data = dict(
             instance_state=instance_state,
@@ -207,7 +211,6 @@ class KtAargauDossierWriter(DossierWriter):
         SUBMITTED = ["submit"]
         DECIDED = SUBMITTED + [
             "formal-exam",
-            "material-exam",
             "distribution",
             "decision",
         ]
@@ -287,15 +290,6 @@ class KtAargauDossierWriter(DossierWriter):
             TargetStatus.APPROVED.value: settings.DECISION["ANSWERS"]["DECISION"][
                 "APPROVED"
             ],
-            TargetStatus.REJECTED.value: settings.DECISION["ANSWERS"]["DECISION"][
-                "REJECTED"
-            ],
-            TargetStatus.WRITTEN_OFF.value: settings.DECISION["ANSWERS"]["DECISION"][
-                "WITHDRAWAL"
-            ],
-            TargetStatus.DONE.value: settings.DECISION["ANSWERS"]["DECISION"][
-                "APPROVED"
-            ],
         }
 
         form_api.save_answer(
@@ -307,14 +301,14 @@ class KtAargauDossierWriter(DossierWriter):
             user=self._caluma_user,
         )
 
-        if dossier._meta.target_state == TargetStatus.REJECTED.value:
-            form_api.save_answer(
-                document=decision_work_item.document,
-                question=Question.objects.get(
-                    pk=settings.DECISION["QUESTIONS"]["BAUABSCHLAG"]
-                ),
-                value=settings.DECISION["ANSWERS"]["BAUABSCHLAG"][
-                    "OHNE_WIEDERHERSTELLUNG"
-                ],
-                user=self._caluma_user,
-            )
+        # if dossier._meta.target_state == TargetStatus.REJECTED.value:
+        #     form_api.save_answer(
+        #         document=decision_work_item.document,
+        #         question=Question.objects.get(
+        #             pk=settings.DECISION["QUESTIONS"]["BAUABSCHLAG"]
+        #         ),
+        #         value=settings.DECISION["ANSWERS"]["BAUABSCHLAG"][
+        #             "OHNE_WIEDERHERSTELLUNG"
+        #         ],
+        #         user=self._caluma_user,
+        #     )

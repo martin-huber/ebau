@@ -15,21 +15,23 @@ MAPPING = {
     "submit_date": "EINDAT",
 }
 
+# SUBMITTED, APPROVED, REJECTED, WRITTEN_OFF, DONE
+
 VALUE_MAPPING = {
     "target_state": {
-        "Gesuch in Erfassung": "new",
-        "Gesuch übermittelt": "subm",
-        "Gesuch storniert": "rejected",
-        "Gesuch in Bearbeitung": "subm",
-        "Anfrage / Stellungnahme offen": "circulation",
-        "In öffentlicher Auflage": "circulation",
-        "Verfügung erstellt": "decision",
-        "Gesuch zurückgezogen": "withdrawn",
-        "Gesuch abgeschrieben": "finished",
-        "Gesuch archiviert": "finished",
-        "Gesuch Offline erfasst": "subm",
-        "Rückbau bestätigt": "construction-acceptance",
-        "An Kanton gesendet": "circulation",
+        "Gesuch in Erfassung": "DRAFT",
+        "Gesuch übermittelt": "SUBMITTED",
+        "Gesuch storniert": "DONE",
+        "Gesuch in Bearbeitung": "SUBMITTED",
+        "Anfrage / Stellungnahme offen": "SUBMITTED",
+        "In öffentlicher Auflage": "SUBMITTED",
+        "Verfügung erstellt": "APPROVED",
+        "Gesuch zurückgezogen": "DONE",
+        "Gesuch abgeschrieben": "DONE",
+        "Gesuch archiviert": "DONE",
+        "Gesuch Offline erfasst": "SUBMITTED",
+        "Rückbau bestätigt": "DONE",
+        "An Kanton gesendet": "SUBMITTED",
     }
 }
 

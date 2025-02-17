@@ -502,6 +502,10 @@ class CaseMetaWriter(FieldWriter):
         formatted_value = value
         if self.formatter == "datetime-to-string":
             formatted_value = datetime.strftime(value, SUBMIT_DATE_FORMAT)
+        if self.formatter == "yyyymmdd":
+            formatted_value = datetime.strftime(
+                datetime.strptime(value, "%Y%m%d"), SUBMIT_DATE_FORMAT
+            )
         instance.case.meta[self.target] = formatted_value
         instance.case.save()
 

@@ -1,11 +1,14 @@
-import hdbcli.dbapi
 import sqlite3
+
+import hdbcli.dbapi
+
 
 def fetch_table_data(cursor, table_name):
     cursor.execute(f"SELECT * FROM {table_name}")
     columns = [desc[0] for desc in cursor.description]
     rows = cursor.fetchall()
     return columns, rows
+
 
 def load_into_sqlite_file(data_dict, db_path="data.db"):
     """Lädt Tabellen in eine SQLite File-Datenbank."""
@@ -26,12 +29,10 @@ def load_into_sqlite_file(data_dict, db_path="data.db"):
     conn.commit()
     conn.close()
 
+
 # Verbindung zu SAP HANA herstellen und Tabellen laden
 sap_conn = hdbcli.dbapi.connect(
-    address='your-db-host',
-    port=30015,
-    user='your-username',
-    password='your-password'
+    address="your-db-host", port=30015, user="your-username", password="your-password"
 )
 sap_cursor = sap_conn.cursor()
 

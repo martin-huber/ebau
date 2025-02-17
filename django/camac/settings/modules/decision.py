@@ -104,6 +104,23 @@ DECISION = {
         "ENABLED": True,
         "ENABLE_STATS": True,
     },
+    "kt_ag": {
+        "ENABLED": True,
+        "QUESTIONS": {
+            "DECISION": "entscheid-entscheid",
+            "DATE": "entscheid-datum",
+        },
+        "ANSWERS": {
+            "DECISION": {
+                "APPROVED": "entscheid-entscheid-baubewilligung-erteilt",
+                "REJECTED": "entscheid-entscheid-abweisung",
+                "PARTIALLY_APPROVED": "entscheid-entscheid-teilbaubewilligung",
+                "WITHDRAWAL": "entscheid-entscheid-abschreibung",
+            }
+        },
+        "INSTANCE_STATE_AFTER_POSITIVE_DECISION": "decided",
+        "INSTANCE_STATE_AFTER_NEGATIVE_DECISION": "decided",
+    },
 }
 
 # ECH 211 judgementType

@@ -61,6 +61,7 @@ class Dossier:
     id: str
     proposal: str
     cantonal_id: Optional[str] = None
+    municipal_id: Optional[str] = None
     plot_data: Optional[Union[List[PlotData], str]] = None
     coordinates: Optional[Union[List[Coordinates], str]] = None
     street: Optional[str] = None

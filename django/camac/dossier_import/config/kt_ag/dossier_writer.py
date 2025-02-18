@@ -29,6 +29,7 @@ from camac.dossier_import.writers import (
     CalumaPlotDataWriter,
     CaseMetaWriter,
     DossierWriter,
+    FieldWriter,
 )
 from camac.instance.domain_logic import CreateInstanceLogic
 from camac.instance.domain_logic.decision import DecisionLogic
@@ -37,14 +38,23 @@ from camac.permissions import events as permissions_events
 from camac.tags.models import Keyword
 
 
+class KeywordWriter(FieldWriter):
+    def write(self, instance, value):
+        keyword = Keyword.objects.filter(
+            name=value, service=self.owner._group.service
+        ).first()
+
+        if keyword:
+            # This only happens after an import was undone
+            keyword.instances.add(instance)
+        else:
+            instance.keywords.create(name=value, service=self.owner._group.service)
+
+
 class KtAargauDossierWriter(DossierWriter):
-    # id = CalumaAnswerWriter(
-    #     target="kommunale-gesuchsnummer", formatter="to-string", protected=True
-    # )
     proposal = CalumaAnswerWriter(target="beschreibung-bauvorhaben", protected=True)
-    cantonal_id = CalumaAnswerWriter(
-        target="kantonale-gesuchsnummer", formatter="to-string"
-    )
+    cantonal_id = KeywordWriter(target="")
+    municipal_id = KeywordWriter(target="")
     plot_data = CalumaPlotDataWriter(
         target="parzellen", column_mapping=PLOT_DATA_MAPPING
     )

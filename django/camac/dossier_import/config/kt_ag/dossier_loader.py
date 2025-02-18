@@ -13,7 +13,11 @@ MAPPING = {
     "id": "GESUCH_ID",
     "proposal": "BTITEL",
     "cantonal_id": "GEMEINDE_BG",
+    "municipal_id": "BVUAFBNR",
     "submit_date": "EINDAT",
+    "city": "CITY",
+    "street": "STANDORTE[0].STRASSE",
+    "street_number": "STANDORTE[0].STRASNR",
 }
 
 # SUBMITTED, APPROVED, REJECTED, WRITTEN_OFF, DONE

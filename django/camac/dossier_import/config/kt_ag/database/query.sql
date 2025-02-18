@@ -8,11 +8,16 @@ where ZEBP_GESUCH.GESUCH_ID in ('EBPA-1720-6526', 'EBPA-8318-3681', 'EBPA-5618-4
 or ZEBP_GESUCH.GEMEINDE_BG in ('2025-500')
 
 -- Standorte je Gesuch
-select ZEBP_STORT.*, ZEZS_CITY.*, ZEBP_PARZ.*
+select ZEBP_STORT.*, ZEZS_CITY.*
 from ZEBP_STORT
-         left join ZEBP_PARZ on (ZEBP_STORT.city_id = ZEBP_PARZ.city_id and ZEBP_STORT.GESUCH_ID = ZEBP_PARZ.GESUCH_ID)
          left join ZEZS_CITY on ZEBP_STORT.CITY_ID = ZEZS_CITY.CITY_ID
 where ZEBP_STORT.GESUCH_ID = 'EBPA-8318-3681'
+
+-- Parzellen je Gesuch
+select ZEBP_PARZ.*, ZEZS_CITY.*
+from ZEBP_PARZ
+         left join ZEZS_CITY on ZEBP_PARZ.CITY_ID = ZEZS_CITY.CITY_ID
+where ZEBP_PARZ.GESUCH_ID = 'EBPA-8318-3681'
 
 -- Kontakte je Gesuch
 select ZEBP_KONTAKT.*
@@ -24,4 +29,5 @@ select ZEZS_DATES.*
 from ZEZS_DATES
 where process_id = 'ZEBP'
     and ZEZS_DATES.EXTERN_ID = 'EBPA-1720-6526'
+
 

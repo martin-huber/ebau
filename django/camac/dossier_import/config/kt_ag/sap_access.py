@@ -10,18 +10,24 @@ from dotenv import load_dotenv
 from hdbcli import dbapi
 from hdbcli.dbapi import Cursor, Decimal
 
-QUERY_APPLICATIONS = """select ZEBP_GESUCH.*, ZEBP_ENTSCHEID.*, TJ30T.*, ZEZS_CITY.*
+QUERY_DOSSIERS = """select ZEBP_GESUCH.*, ZEBP_ENTSCHEID.*, TJ30T.*, ZEZS_CITY.*
                         from ZEBP_GESUCH
                                  left join ZEBP_ENTSCHEID on ZEBP_GESUCH.GESUCH_ID = ZEBP_ENTSCHEID.EXTERN_ID
                                  left join TJ30T on TJ30T.ESTAT = ZEBP_GESUCH.ESTAT and TJ30T.STSMA = 'ZEBP'
                                  left join ZEZS_CITY on ZEZS_CITY.CITY_ID = ZEBP_GESUCH.GEMEINDE_ID
                      """
-SUBQUERY_LOCATIONS = """select ZEBP_STORT.*, ZEZS_CITY.*, ZEBP_PARZ.*
+SUBQUERY_LOCATIONS = """select ZEBP_STORT.*, ZEZS_CITY.*
                         from ZEBP_STORT
-                                 left join ZEBP_PARZ on (ZEBP_STORT.city_id = ZEBP_PARZ.city_id and ZEBP_STORT.GESUCH_ID = ZEBP_PARZ.GESUCH_ID)
                                  left join ZEZS_CITY on ZEBP_STORT.CITY_ID = ZEZS_CITY.CITY_ID
                         where ZEBP_STORT.GESUCH_ID = ?
                     """
+
+SUBQUERY_PLOTS = """select ZEBP_PARZ.*, ZEZS_CITY.*
+                        from ZEBP_PARZ
+                                 left join ZEZS_CITY on ZEBP_STORT.CITY_ID = ZEZS_CITY.CITY_ID
+                        where ZEBP_PARZ.GESUCH_ID = ?
+                    """
+
 SUBQUERY_CONTACTS = """select ZEBP_KONTAKT.*
                         from ZEBP_KONTAKT
                         where ZEBP_KONTAKT.GESUCH_ID = ?
@@ -33,6 +39,7 @@ SUBQUERY_DATES = """select ZEZS_DATES.*
                 """
 SUBQUERIES = {
     "STANDORTE": SUBQUERY_LOCATIONS,
+    "PARZELLEN": SUBQUERY_PLOTS,
     "KONTAKTE": SUBQUERY_CONTACTS,
     "DATES": SUBQUERY_DATES,
 }
@@ -142,8 +149,8 @@ class SAPAccess:
         with open(file_path, "w", encoding="utf-8") as file:
             file.write(data)
 
-    def _write_applications_to_json(self):
-        result = self.query_applications()
+    def _write_dossiers_to_json(self):
+        result = self.query_dossiers()
         i = 0
         for r in result:
             i += 1
@@ -151,7 +158,7 @@ class SAPAccess:
             self._write_json_file(json_str, "database/json/", f"{r['GESUCH_ID']}.json")
         print(f"Read {i} Gesuche from database")
 
-    def _read_applications_from_json(self):
+    def _read_dossiers_from_json(self):
         base_dir = os.path.dirname(os.path.abspath(__file__))
         target_dir = Path(os.path.join(base_dir, "database/json/"))
 
@@ -159,7 +166,7 @@ class SAPAccess:
             with open(json_file, "r", encoding="utf-8") as file:
                 yield json.load(file)
 
-    def query_applications(
+    def query_dossiers(
         self,
         filter: Optional[str] = None,
         batch_size: Optional[int] = 500,
@@ -167,20 +174,20 @@ class SAPAccess:
     ) -> Generator[Dict, None, None]:
         if self._connection:
             return self._run_query(
-                QUERY_APPLICATIONS,
+                QUERY_DOSSIERS,
                 SUBQUERIES,
                 batch_size=batch_size,
                 filter=filter,
                 limit=limit,
             )
         else:
-            return self._read_applications_from_json()
+            return self._read_dossiers_from_json()
 
 
 if __name__ == "__main__":
     db_client = SAPAccess()
     try:
-        execution_time = timeit.timeit(db_client._write_applications_to_json, number=1)
+        execution_time = timeit.timeit(db_client._write_dossiers_to_json, number=1)
         print(f"Writing Gesuche to JSON took {execution_time} seconds.")
     finally:
         db_client.close_connection()

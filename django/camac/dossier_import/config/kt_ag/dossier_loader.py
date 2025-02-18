@@ -12,6 +12,7 @@ DATE_FORMAT = "%d.%m.%Y"
 MAPPING = {
     "id": "GESUCH_ID",
     "proposal": "BTITEL",
+    "cantonal_id": "GEMEINDE_BG",
     "submit_date": "EINDAT",
 }
 
@@ -43,7 +44,7 @@ class KtAargauDossierLoader(DossierLoader):
         self._sap_access = SAPAccess()
 
     def load_dossiers(self, param: DossierImport):
-        yield from (self._map(r) for r in self._sap_access.query_applications())
+        yield from (self._map(r) for r in self._sap_access.query_dossiers())
 
     def _map(self, r: Dict) -> Dossier:
         mapped_values = {

@@ -24,7 +24,7 @@ SUBQUERY_LOCATIONS = """select ZEBP_STORT.*, ZEZS_CITY.*
 
 SUBQUERY_PLOTS = """select ZEBP_PARZ.*, ZEZS_CITY.*
                         from ZEBP_PARZ
-                                 left join ZEZS_CITY on ZEBP_STORT.CITY_ID = ZEZS_CITY.CITY_ID
+                                 left join ZEZS_CITY on ZEBP_PARZ.CITY_ID = ZEZS_CITY.CITY_ID
                         where ZEBP_PARZ.GESUCH_ID = ?
                     """
 

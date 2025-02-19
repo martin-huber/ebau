@@ -65,8 +65,6 @@ class TransformingWriter(CalumaAnswerWriter):
         self.transformation = transformation
 
     def write(self, instance, value):
-        if not value:
-            return
         dossier = self.context.get("dossier")
         super().write(instance, self.transformation(dossier))
 

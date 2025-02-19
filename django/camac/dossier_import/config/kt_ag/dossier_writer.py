@@ -8,6 +8,7 @@ from caluma.caluma_workflow.api import skip_work_item
 from caluma.caluma_workflow.models import WorkItem
 
 from camac import settings
+from camac.caluma.extensions.data_sources import Municipalities
 from camac.caluma.extensions.events.general import get_caluma_setting
 from camac.core.models import InstanceService
 from camac.core.utils import generate_sort_key
@@ -17,6 +18,7 @@ from camac.dossier_import.config.kt_ag import (
     PLOT_DATA_MAPPING,
 )
 from camac.dossier_import.dossier_classes import Dossier
+from camac.dossier_import.loaders import safe_join
 from camac.dossier_import.messages import (
     Message,
     MessageCodes,
@@ -39,7 +41,13 @@ from camac.tags.models import Keyword
 
 
 class KeywordWriter(FieldWriter):
+    def __init__(self):
+        super().__init__(target="")
+
     def write(self, instance, value):
+        if not value:
+            return
+
         keyword = Keyword.objects.filter(
             name=value, service=self.owner._group.service
         ).first()
@@ -51,18 +59,38 @@ class KeywordWriter(FieldWriter):
             instance.keywords.create(name=value, service=self.owner._group.service)
 
 
+class TransformingWriter(CalumaAnswerWriter):
+    def __init__(self, target, transformation):
+        super().__init__(target=target)
+        self.transformation = transformation
+
+    def write(self, instance, value):
+        if not value:
+            return
+        dossier = self.context.get("dossier")
+        super().write(instance, self.transformation(dossier))
+
+
 class KtAargauDossierWriter(DossierWriter):
     proposal = CalumaAnswerWriter(target="beschreibung-bauvorhaben", protected=True)
-    cantonal_id = KeywordWriter(target="")
-    municipal_id = KeywordWriter(target="")
+    cantonal_id = KeywordWriter()
+    municipal_id = KeywordWriter()
+    submit_date = CaseMetaWriter(
+        target="submit-date", formatter="yyyymmdd", protected=True
+    )
+    street = TransformingWriter(
+        target="street-and-housenumber",
+        transformation=lambda dossier: safe_join(
+            (dossier.street, dossier.street_number)
+        ),
+    )
+    city = CalumaAnswerWriter(target="ort-grundstueck")
+
     plot_data = CalumaPlotDataWriter(
         target="parzellen", column_mapping=PLOT_DATA_MAPPING
     )
     usage = CalumaAnswerWriter(target="nutzungsplanung-grundnutzung")
     application_type = CalumaAnswerWriter(target="geschaeftstyp")
-    submit_date = CaseMetaWriter(
-        target="submit-date", formatter="yyyymmdd", protected=True
-    )
     decision_date = CalumaAnswerWriter(target="entscheid-datum", task="decision")
     publication_date = CalumaAnswerWriter(target="datum-publikation")
     construction_start_date = CalumaAnswerWriter(target="datum-baubeginn")
@@ -72,9 +100,6 @@ class KtAargauDossierWriter(DossierWriter):
     link = CalumaAnswerWriter(target="link")
     custom_1 = CalumaAnswerWriter(target="freies-textfeld-1")
     custom_2 = CalumaAnswerWriter(target="freies-textfeld-2")
-    street = CalumaAnswerWriter(target="strasse-flurname")
-    street_number = CalumaAnswerWriter(target="strasse-nummer", formatter="to-string")
-    city = CalumaAnswerWriter(target="ort")
     applicant = CalumaListAnswerWriter(
         target="bauherrin",
         column_mapping=PERSON_MAPPING,
@@ -168,11 +193,26 @@ class KtAargauDossierWriter(DossierWriter):
         else:
             instance.keywords.create(name=dossier_id, service=self._group.service)
 
+    def _get_municipality_id(self, municipality, municipalities):
+        result = next(
+            (
+                eintrag[0]
+                for eintrag in municipalities
+                if eintrag[1]["de"] == municipality
+            ),
+            None,
+        )
+        return str(result)
+
     def _post_create_instance(self, instance: Instance, dossier: Dossier):
+        municipalities = Municipalities().get_data(self._caluma_user, None, None)
+        municipality_id = self._get_municipality_id(
+            dossier.responsible_municipality, municipalities
+        )
         save_answer(
             document=instance.case.document,
             question=Question.objects.get(slug="gemeinde"),
-            value=str(55),  # todo from where to get the "gemeinde" ?
+            value=municipality_id,
             user=self._caluma_user,
         )
 

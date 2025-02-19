@@ -15,7 +15,8 @@ MAPPING = {
     "cantonal_id": "GEMEINDE_BG",
     "municipal_id": "BVUAFBNR",
     "submit_date": "EINDAT",
-    "city": "CITY",
+    "responsible_municipality": "CITY",
+    "city": "STANDORTE[0].CITY",
     "street": "STANDORTE[0].STRASSE",
     "street_number": "STANDORTE[0].STRASNR",
 }
@@ -24,7 +25,7 @@ MAPPING = {
 
 VALUE_MAPPING = {
     "target_state": {
-        "Gesuch in Erfassung": "DRAFT",
+        "Gesuch in Erfassung": "SUBMITTED",  # TODO should be DRAFT
         "Gesuch übermittelt": "SUBMITTED",
         "Gesuch storniert": "DONE",
         "Gesuch in Bearbeitung": "SUBMITTED",

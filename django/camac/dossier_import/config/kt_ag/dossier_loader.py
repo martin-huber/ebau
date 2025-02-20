@@ -1,6 +1,6 @@
 from typing import Dict
 
-from jsonpath_ng import parse
+from jsonpath_ng.ext import parse
 
 from camac.dossier_import.config.kt_ag.sap_access import SAPAccess
 from camac.dossier_import.dossier_classes import Dossier
@@ -12,13 +12,13 @@ DATE_FORMAT = "%d.%m.%Y"
 MAPPING = {
     "id": "GESUCH_ID",
     "proposal": "BTITEL",
-    "cantonal_id": "GEMEINDE_BG",
-    "municipal_id": "BVUAFBNR",
+    "cantonal_id": "BVUAFBNR",
+    "municipal_id": "GEMEINDE_BG",
     "submit_date": "EINDAT",
     "responsible_municipality": "CITY",
-    "city": "STANDORTE[0].CITY",
-    "street": "STANDORTE[0].STRASSE",
-    "street_number": "STANDORTE[0].STRASNR",
+    "city": "CITY",
+    "street": "STANDORTE[?(@.CITY == '{CITY}')].STRASSE",
+    "street_number": "STANDORTE[?(@.CITY == '{CITY}')].STRASNR",
 }
 
 # SUBMITTED, APPROVED, REJECTED, WRITTEN_OFF, DONE
@@ -51,9 +51,14 @@ class KtAargauDossierLoader(DossierLoader):
     def load_dossiers(self, param: DossierImport):
         yield from (self._map(r) for r in self._sap_access.query_dossiers())
 
-    def _map(self, r: Dict) -> Dossier:
+    @staticmethod
+    def _map(r: Dict) -> Dossier:
+        # build the jsonpath expression for each field, substitude placeholders with toplevel dict values and search
+        # for the value of the jsonpath expression in the dict
         mapped_values = {
-            field: parse(f"$.{jsonpath}").find(r)[0].value
+            field: next(
+                (m.value for m in parse(f"$.{jsonpath}".format(**r)).find(r)), None
+            )
             for field, jsonpath in MAPPING.items()
         }
 

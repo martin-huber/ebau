@@ -1,3 +1,4 @@
+from collections import defaultdict
 from typing import Dict
 
 from jsonpath_ng.ext import parse
@@ -57,7 +58,13 @@ class KtAargauDossierLoader(DossierLoader):
         # for the value of the jsonpath expression in the dict
         mapped_values = {
             field: next(
-                (m.value for m in parse(f"$.{jsonpath}".format(**r)).find(r)), None
+                (
+                    m.value
+                    for m in parse(
+                        f"$.{jsonpath}".format_map(defaultdict(lambda: None, r))
+                    ).find(r)
+                ),
+                None,
             )
             for field, jsonpath in MAPPING.items()
         }
@@ -65,5 +72,7 @@ class KtAargauDossierLoader(DossierLoader):
         dossier = Dossier(**mapped_values)
         dossier._meta = Dossier.Meta(
             target_state=VALUE_MAPPING["target_state"][r[TARGET_STATE_KEY]]
+            if TARGET_STATE_KEY in r
+            else None
         )
         return dossier

@@ -59,11 +59,17 @@ def test_mapping_for_multiple_locations():
                     "STRASNR": "1",
                     "CITY": "Möhlin",
                 },
+                {
+                    "STRASSE": "Nicht gematchte Strasse",
+                    "STRASNR": "11",
+                    "CITY": "Möhlin",
+                },
             ],
         }
     )
 
     assert result.responsible_municipality == "Möhlin"
     assert result.city == "Möhlin"
+    # should map the first location where CITY is equal to the parent CITY
     assert result.street == "Musterstrasse"
     assert result.street_number == "1"

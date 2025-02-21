@@ -1,8 +1,9 @@
-from typing import List
+from logging import getLogger
+from typing import Any, Callable, List
 
 from caluma.caluma_form import api as form_api
-from caluma.caluma_form.api import save_answer
 from caluma.caluma_form.models import Form as CalumaForm, Question
+from caluma.caluma_user.models import BaseUser
 from caluma.caluma_workflow import api as workflow_api
 from caluma.caluma_workflow.api import skip_work_item
 from caluma.caluma_workflow.models import WorkItem
@@ -12,10 +13,12 @@ from camac.caluma.extensions.data_sources import Municipalities
 from camac.caluma.extensions.events.general import get_caluma_setting
 from camac.core.models import InstanceService
 from camac.core.utils import generate_sort_key
-from camac.dossier_import.config.kt_ag import (
+from camac.dossier_import.config.kt_ag.writer_mappings import (
+    INSTANCE_STATE_MAPPING,
     PERSON_MAPPING,
     PERSON_VALUE_MAPPING,
     PLOT_DATA_MAPPING,
+    TARGET_STATE_MAPPING,
 )
 from camac.dossier_import.dossier_classes import Dossier
 from camac.dossier_import.loaders import safe_join
@@ -28,7 +31,6 @@ from camac.dossier_import.validation import TargetStatus
 from camac.dossier_import.writers import (
     CalumaAnswerWriter,
     CalumaListAnswerWriter,
-    CalumaPlotDataWriter,
     CaseMetaWriter,
     DossierWriter,
     FieldWriter,
@@ -38,6 +40,8 @@ from camac.instance.domain_logic.decision import DecisionLogic
 from camac.instance.models import Form, Instance, InstanceState
 from camac.permissions import events as permissions_events
 from camac.tags.models import Keyword
+
+log = getLogger(__name__)
 
 
 class KeywordWriter(FieldWriter):
@@ -59,17 +63,51 @@ class KeywordWriter(FieldWriter):
             instance.keywords.create(name=value, service=self.owner._group.service)
 
 
-class TransformingWriter(CalumaAnswerWriter):
-    def __init__(self, target, transformation):
-        super().__init__(target=target)
-        self.transformation = transformation
+class TransformingWriter(FieldWriter):
+    def __init__(
+        self, delegate: FieldWriter, transform: Callable[[Dossier, BaseUser], Any]
+    ):
+        super().__init__(target="")
+        self.transform = transform
+        self.delegate = delegate
 
     def write(self, instance, value):
+        self.delegate.owner = self.owner
+        self.delegate.context = self.context
         dossier = self.context.get("dossier")
-        super().write(instance, self.transformation(dossier))
+        caluma_user = self.context.get("caluma_user")
+        self.delegate.write(instance, self.transform(dossier, caluma_user))
+
+
+def _lookup_municipality_id(municipality: str, user: BaseUser) -> str:
+    municipalities = Municipalities().get_data(user, None, None)
+    result = next(
+        (eintrag[0] for eintrag in municipalities if eintrag[1]["de"] == municipality),
+        None,
+    )
+    if not result:
+        log.error("Could not find municipality '%s'", municipality)
+        return ""
+    return str(result)
+
+
+def _transform_municipality_in_plots(dossier: Dossier, user: BaseUser):
+    for plot in dossier.plot_data:
+        plot.municipality = _lookup_municipality_id(plot.municipality, user)
+    return dossier.plot_data
+
+
+def _year_from_date_str(date_str: str):
+    return date_str[:4]
 
 
 class KtAargauDossierWriter(DossierWriter):
+    responsible_municipality = TransformingWriter(
+        delegate=CalumaAnswerWriter(target="gemeinde"),
+        transform=lambda dossier, user: _lookup_municipality_id(
+            dossier.responsible_municipality, user
+        ),
+    )
     proposal = CalumaAnswerWriter(target="beschreibung-bauvorhaben", protected=True)
     cantonal_id = KeywordWriter()
     municipal_id = KeywordWriter()
@@ -77,16 +115,19 @@ class KtAargauDossierWriter(DossierWriter):
         target="submit-date", formatter="yyyymmdd", protected=True
     )
     street = TransformingWriter(
-        target="street-and-housenumber",
-        transformation=lambda dossier: safe_join(
+        delegate=CalumaAnswerWriter(target="street-and-housenumber"),
+        transform=lambda dossier, user: safe_join(
             (dossier.street, dossier.street_number)
         ),
     )
     city = CalumaAnswerWriter(target="ort-grundstueck")
-
-    plot_data = CalumaPlotDataWriter(
-        target="parzellen", column_mapping=PLOT_DATA_MAPPING
+    plot_data = TransformingWriter(
+        delegate=CalumaListAnswerWriter(
+            target="parzelle", column_mapping=PLOT_DATA_MAPPING
+        ),
+        transform=_transform_municipality_in_plots,
     )
+
     usage = CalumaAnswerWriter(target="nutzungsplanung-grundnutzung")
     application_type = CalumaAnswerWriter(target="geschaeftstyp")
     decision_date = CalumaAnswerWriter(target="entscheid-datum", task="decision")
@@ -108,6 +149,7 @@ class KtAargauDossierWriter(DossierWriter):
         column_mapping=PERSON_MAPPING,
         value_mapping=PERSON_VALUE_MAPPING,
     )
+
     project_author = CalumaListAnswerWriter(
         target="projektverfasserin",
         column_mapping=PERSON_MAPPING,
@@ -116,9 +158,7 @@ class KtAargauDossierWriter(DossierWriter):
 
     def create_instance(self, dossier: Dossier) -> Instance:
         instance_state = InstanceState.objects.get(
-            name=settings.DOSSIER_IMPORT["INSTANCE_STATE_MAPPING"].get(
-                dossier._meta.target_state
-            )
+            name=INSTANCE_STATE_MAPPING.get(dossier._meta.target_state)
         )
 
         creation_data = dict(
@@ -148,7 +188,7 @@ class KtAargauDossierWriter(DossierWriter):
         )
 
         dossier_number = CreateInstanceLogic.generate_identifier(
-            instance, self._year_from_date_str(dossier.submit_date)
+            instance, _year_from_date_str(dossier.submit_date)
         )
 
         instance.case.meta.update(
@@ -160,9 +200,6 @@ class KtAargauDossierWriter(DossierWriter):
         instance.case.save()
         # permissions_events.Trigger.instance_submitted(None, instance)
         return instance
-
-    def _year_from_date_str(self, date_str: str):
-        return date_str[:4]
 
     def get_existing_dossier_ids(self, dossier_ids):
         return list(
@@ -191,32 +228,16 @@ class KtAargauDossierWriter(DossierWriter):
         else:
             instance.keywords.create(name=dossier_id, service=self._group.service)
 
-    def _get_municipality_id(self, municipality, municipalities):
-        result = next(
-            (
-                eintrag[0]
-                for eintrag in municipalities
-                if eintrag[1]["de"] == municipality
-            ),
-            None,
-        )
-        return str(result)
-
-    def _post_create_instance(self, instance: Instance, dossier: Dossier):
-        municipalities = Municipalities().get_data(self._caluma_user, None, None)
-        municipality_id = self._get_municipality_id(
-            dossier.responsible_municipality, municipalities
-        )
-        save_answer(
-            document=instance.case.document,
-            question=Question.objects.get(slug="gemeinde"),
-            value=municipality_id,
-            user=self._caluma_user,
-        )
-
-    def _post_write_fields(self, instance, dossier):
-        # self._write_triage_fields(instance)
-        pass
+    # def _post_create_instance(self, instance: Instance, dossier: Dossier):
+    #     municipality_id = _lookup_municipality_id(
+    #         dossier.responsible_municipality, self._caluma_user
+    #     )
+    #     save_answer(
+    #         document=instance.case.document,
+    #         question=Question.objects.get(slug="gemeinde"),
+    #         value=municipality_id,
+    #         user=self._caluma_user,
+    #     )
 
     def _write_triage_fields(self, instance: Instance):
         """Write triage answers for personal data.
@@ -254,7 +275,7 @@ class KtAargauDossierWriter(DossierWriter):
 
     def _set_workflow_state(self, instance: Instance, dossier) -> List[Message]:
         messages = []
-        target_state = dossier._meta.target_state
+        target_state = TARGET_STATE_MAPPING.get(dossier._meta.target_state)
 
         SUBMITTED = ["submit"]
         DECIDED = SUBMITTED + [
@@ -340,16 +361,17 @@ class KtAargauDossierWriter(DossierWriter):
             ],
         }
 
+        target_state = TARGET_STATE_MAPPING.get(dossier._meta.target_state)
         form_api.save_answer(
             document=decision_work_item.document,
             question=Question.objects.get(
                 slug=settings.DECISION["QUESTIONS"]["DECISION"]
             ),
-            value=decision_mapping[dossier._meta.target_state],
+            value=decision_mapping[target_state],
             user=self._caluma_user,
         )
 
-        # if dossier._meta.target_state == TargetStatus.REJECTED.value:
+        # if target_state== TargetStatus.REJECTED.value:
         #     form_api.save_answer(
         #         document=decision_work_item.document,
         #         question=Question.objects.get(

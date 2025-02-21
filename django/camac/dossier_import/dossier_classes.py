@@ -85,6 +85,9 @@ class Dossier:
     project_author: Optional[Union[List[Person], str]] = None
     attachments: Optional[Union[List[Attachment], str]] = None
     responsible: Optional[str] = field(default=None)
+    _meta: Optional["Dossier.Meta"] = field(
+        default_factory=lambda: Dossier.Meta(target_state="DRAFT")
+    )
 
     @dataclass
     class Meta:

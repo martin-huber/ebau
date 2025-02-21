@@ -102,13 +102,5 @@ DOSSIER_IMPORT = {
         "LOADER_CLASS": "camac.dossier_import.config.kt_ag.dossier_loader.KtAargauDossierLoader",
         "CALUMA_FORM": "baugesuch-migration",
         "FORM_ID": 1,
-        "INSTANCE_STATE_MAPPING": {
-            "DRAFT": "new",
-            "SUBMITTED": "subm",
-            "APPROVED": "decision",
-            "REJECTED": "finished",
-            "WRITTEN OFF": "finished",
-            "DONE": "finished",
-        },
     },
 }

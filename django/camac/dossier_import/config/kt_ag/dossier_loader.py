@@ -1,48 +1,61 @@
 from collections import defaultdict
-from typing import Dict
+from dataclasses import dataclass
+from typing import Dict, Type, TypeVar, Union
 
 from jsonpath_ng.ext import parse
 
 from camac.dossier_import.config.kt_ag.sap_access import SAPAccess
-from camac.dossier_import.dossier_classes import Dossier
+from camac.dossier_import.dossier_classes import Coordinates, Dossier, PlotData
 from camac.dossier_import.loaders import DossierLoader
 from camac.dossier_import.models import DossierImport
 
-DATE_FORMAT = "%d.%m.%Y"
+T = TypeVar("T")
 
-MAPPING = {
-    "id": "GESUCH_ID",
-    "proposal": "BTITEL",
-    "cantonal_id": "BVUAFBNR",
-    "municipal_id": "GEMEINDE_BG",
-    "submit_date": "EINDAT",
-    "responsible_municipality": "CITY",
-    "city": "CITY",
-    "street": "STANDORTE[?(@.CITY == '{CITY}')].STRASSE",
-    "street_number": "STANDORTE[?(@.CITY == '{CITY}')].STRASNR",
-}
 
-# SUBMITTED, APPROVED, REJECTED, WRITTEN_OFF, DONE
+@dataclass
+class Mapping:
+    data_path: str
+    result_type: Type
+    mappings: Dict[str, Union[str, "Mapping"]]
 
-VALUE_MAPPING = {
-    "target_state": {
-        "Gesuch in Erfassung": "SUBMITTED",  # TODO should be DRAFT
-        "Gesuch übermittelt": "SUBMITTED",
-        "Gesuch storniert": "DONE",
-        "Gesuch in Bearbeitung": "SUBMITTED",
-        "Anfrage / Stellungnahme offen": "SUBMITTED",
-        "In öffentlicher Auflage": "SUBMITTED",
-        "Verfügung erstellt": "APPROVED",
-        "Gesuch zurückgezogen": "DONE",
-        "Gesuch abgeschrieben": "DONE",
-        "Gesuch archiviert": "DONE",
-        "Gesuch Offline erfasst": "SUBMITTED",
-        "Rückbau bestätigt": "DONE",
-        "An Kanton gesendet": "SUBMITTED",
-    }
-}
 
-TARGET_STATE_KEY = "TXT30"
+MAPPING = Mapping(
+    "$",
+    Dossier,
+    {
+        "id": "GESUCH_ID",
+        "proposal": "BTITEL",
+        "cantonal_id": "BVUAFBNR",
+        "municipal_id": "GEMEINDE_BG",
+        "submit_date": "EINDAT",
+        "responsible_municipality": "CITY",
+        "city": "CITY",
+        "street": "STANDORTE[?(@.CITY == '{CITY}')].STRASSE",
+        "street_number": "STANDORTE[?(@.CITY == '{CITY}')].STRASNR",
+        "plot_data": Mapping(
+            "PARZELLEN[*]",
+            PlotData,
+            {
+                "number": "PARZNR",
+                "municipality": "CITY",
+                "egrid": "TODO",  # todo
+            },
+        ),
+        "coordinates": Mapping(
+            "STANDORTE[?(@.CITY == '{CITY}')]",
+            Coordinates,
+            {
+                "n": "KOORDB",
+                "e": "KOORDL",
+            },
+        ),
+        "_meta": Mapping(
+            "$",
+            Dossier.Meta,
+            {"target_state": "TXT30"},
+        ),
+    },
+)
 
 
 class KtAargauDossierLoader(DossierLoader):
@@ -50,29 +63,49 @@ class KtAargauDossierLoader(DossierLoader):
         self._sap_access = SAPAccess()
 
     def load_dossiers(self, param: DossierImport):
-        yield from (self._map(r) for r in self._sap_access.query_dossiers())
+        yield from (self.map_data(data) for data in self._sap_access.query_dossiers())
 
-    @staticmethod
-    def _map(r: Dict) -> Dossier:
-        # build the jsonpath expression for each field, substitude placeholders with toplevel dict values and search
-        # for the value of the jsonpath expression in the dict
+    @classmethod
+    def map_data(cls, data):
+        return cls._map(MAPPING.mappings, MAPPING.result_type, data)
+
+    @classmethod
+    def _map(
+        cls, mappings: Dict[str, Union[str, Mapping]], target_class: T, data: Dict
+    ) -> T:
         mapped_values = {
-            field: next(
+            field: cls._extract_value(mapping, data)
+            for field, mapping in mappings.items()
+        }
+
+        return target_class(**mapped_values)
+
+    @classmethod
+    def _extract_value(cls, mapping: Union[str, Mapping], data: Dict):
+        if type(mapping) is str:
+            # build the jsonpath expression for each field, substitude placeholders with toplevel dict values and search
+            # for the value of the jsonpath expression in the dict
+            return next(
                 (
                     m.value
                     for m in parse(
-                        f"$.{jsonpath}".format_map(defaultdict(lambda: None, r))
-                    ).find(r)
+                        f"$.{mapping}".format_map(defaultdict(lambda: None, data))
+                    ).find(data)
                 ),
                 None,
             )
-            for field, jsonpath in MAPPING.items()
-        }
+        else:
+            mapping: Mapping
+            if mapping.data_path and mapping.data_path != "$":
+                subdata_list = parse(
+                    f"$.{mapping.data_path}".format_map(defaultdict(lambda: None, data))
+                ).find(data)
+                result = []
+                for d in subdata_list:
+                    result.append(
+                        cls._map(mapping.mappings, mapping.result_type, d.value)
+                    )
+                return result
 
-        dossier = Dossier(**mapped_values)
-        dossier._meta = Dossier.Meta(
-            target_state=VALUE_MAPPING["target_state"][r[TARGET_STATE_KEY]]
-            if TARGET_STATE_KEY in r
-            else None
-        )
-        return dossier
+            else:
+                return cls._map(mapping.mappings, mapping.result_type, data)
